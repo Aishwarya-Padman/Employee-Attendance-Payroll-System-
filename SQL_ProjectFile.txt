@@ -1,0 +1,101 @@
+create database Project;
+use Project;
+
+-- 1. Create Tables
+CREATE TABLE Employees (
+    EmployeeID INT AUTO_INCREMENT PRIMARY KEY,
+    Name VARCHAR(100),
+    Department VARCHAR(50),
+    JoinDate DATE
+);
+
+CREATE TABLE Attendance (
+    AttendanceID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT,
+    AttendanceDate DATE,
+    Status ENUM('Present','Absent','Leave'),
+    FOREIGN KEY(EmployeeID) REFERENCES Employees(EmployeeID)
+);
+
+CREATE TABLE Payroll (
+    PayrollID INT AUTO_INCREMENT PRIMARY KEY,
+    EmployeeID INT,
+    Month YEAR,
+    BasicSalary DECIMAL(10,2),
+    OvertimeHours INT,
+    OvertimeRate DECIMAL(10,2),
+    TotalSalary DECIMAL(10,2),
+    FOREIGN KEY(EmployeeID) REFERENCES Employees(EmployeeID)
+);
+
+-- 2. Insert Sample Data
+INSERT INTO Employees (Name, Department, JoinDate) VALUES
+('Alice','HR','2025-01-01'),
+('Bob','Finance','2025-01-15'),
+('Charlie','IT','2025-02-01');
+
+INSERT INTO Attendance (EmployeeID, AttendanceDate, Status) VALUES
+(1,'2026-03-01','Present'),
+(1,'2026-03-02','Absent'),
+(2,'2026-03-01','Present'),
+(3,'2026-03-01','Present');
+
+ALTER TABLE Payroll MODIFY Month VARCHAR(7);
+
+INSERT INTO Payroll (EmployeeID, Month, BasicSalary, OvertimeHours, OvertimeRate, TotalSalary) VALUES
+(1,'2026-03',30000,10,200,32000),
+(2,'2026-03',35000,5,200,36000),
+(3,'2026-03',40000,8,200,41600);
+
+-- 3. SQL Queries / Analysis
+
+-- Calculate monthly attendance per employee
+SELECT E.Name, COUNT(*) AS TotalPresent
+FROM Attendance A
+JOIN Employees E ON A.EmployeeID = E.EmployeeID
+WHERE A.Status='Present'
+GROUP BY E.Name;
+
+-- Calculate total salary including overtime
+SELECT E.Name, P.BasicSalary, (P.OvertimeHours * P.OvertimeRate) AS OvertimeAmount, P.TotalSalary
+FROM Payroll P
+JOIN Employees E ON P.EmployeeID = E.EmployeeID;
+
+-- Department-wise average salary
+SELECT E.Department, AVG(P.TotalSalary) AS AvgSalary
+FROM Payroll P
+JOIN Employees E ON P.EmployeeID = E.EmployeeID
+GROUP BY E.Department;
+
+-- Identify top performers (attendance + salary)
+WITH AttendanceSummary AS (
+    SELECT 
+        E.EmployeeID,
+        E.Name,
+        E.Department,
+        COUNT(A.Status) AS AttendanceCount,
+        P.TotalSalary
+    FROM Employees E
+    JOIN Attendance A ON E.EmployeeID = A.EmployeeID
+    AND A.Status='Present'
+    JOIN Payroll P ON E.EmployeeID = P.EmployeeID
+    GROUP BY E.EmployeeID, E.Name, E.Department, P.TotalSalary
+)
+SELECT 
+    Name,
+    Department,
+    AttendanceCount,
+    TotalSalary,
+    RANK() OVER (
+        PARTITION BY Department
+        ORDER BY AttendanceCount DESC, TotalSalary DESC
+    ) AS RankByPerformance
+FROM AttendanceSummary
+ORDER BY Department, RankByPerformance;
+
+-- Subquery Example: Employees with salary > average
+SELECT Name, TotalSalary
+FROM Payroll P
+JOIN Employees E 
+ON P.EmployeeID = E.EmployeeID
+WHERE TotalSalary > (SELECT AVG(TotalSalary) FROM Payroll);
